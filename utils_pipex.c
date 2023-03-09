@@ -6,16 +6,16 @@
 /*   By: enoviell <enoviell@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/03/07 11:39:26 by enoviell          #+#    #+#             */
-/*   Updated: 2023/03/07 18:57:04 by enoviell         ###   ########.fr       */
+/*   Updated: 2023/03/09 15:09:38 by enoviell         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "pipex.h"
 
-void	ft_error(char *str)
+void	error(void)
 {
-	ft_putstr_fd(str, 2);
-	exit(1);
+	perror("\033[31mError");
+	exit(EXIT_FAILURE);
 }
 
 void	ft_putstr_fd(char *s, int fd)
@@ -59,20 +59,22 @@ char	*find_path(char *cmd, char **envp)
 	return (0);
 }
 
-void	execute(char *argv, char *envp)
+void	execute(char *argv, char **envp)
 {
 	char	**command;
 	char	*path;
 	int		i;
 
 	i = 0;
-	command = ft_split(argv ,' ');
-	path = find_path(*command, &envp);
+	command = ft_split(argv, ' ');
+	path = find_path(command [0], envp);
 	if (!path)
-		ft_error("Command not found");
-	while(command[i])
-		free(command[i++]);
-	free(command);
-	if (execve(path, &argv, &envp) == -1)
-		ft_error("Execve error");
+	{
+		while (command[i++])
+			free(command[i]);
+		free (command);
+		error ();
+	}
+	if (execve(path, command, envp) == -1)
+		error();
 }
