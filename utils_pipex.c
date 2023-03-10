@@ -1,80 +1,106 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   utils_pipex.c                                      :+:      :+:    :+:   */
+/*   path_n_command.c                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: enoviell <enoviell@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2023/03/07 11:39:26 by enoviell          #+#    #+#             */
-/*   Updated: 2023/03/09 15:09:38 by enoviell         ###   ########.fr       */
+/*   Created: 2023/03/10 15:38:05 by enoviell          #+#    #+#             */
+/*   Updated: 2023/03/10 15:38:06 by enoviell         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
+
 #include "pipex.h"
 
-void	error(void)
+char	**get_line(char **envp)
 {
-	perror("\033[31mError");
-	exit(EXIT_FAILURE);
+	int		i;
+	int		flag;
+	char	**ret;
+
+	flag = 0;
+	i = -1;
+	ret = 0;
+	while (envp[++i])
+	{
+		if (ft_strncmp("PATH", envp[i], 4) == 0)
+		{
+			flag = 1;
+			break ;
+		}
+	}
+	if (flag)
+		ret = ft_split((envp[i] + 5), ':');
+	return (ret);
 }
 
-void	ft_putstr_fd(char *s, int fd)
+char	*path_checker(t_pipex *pipex)
 {
+	int	flag;
 	int	i;
 
-	i = 0;
-	while (s[i])
-	{
-		write(fd, &s[i], 1);
-		i++;
-	}
-}
-
-char	*find_path(char *cmd, char **envp)
-{
-	char	**paths;
-	char	*path;
-	int		i;
-	char	*part_path;
-
-	i = 0;
-	while (ft_strnstr(envp[i], "PATH", 4) == 0)
-		i++;
-	paths = ft_split(envp[i] + 5, ':');
-	i = 0;
-	while (paths[i])
-	{
-		part_path = ft_strjoin(paths[i], "/");
-		path = ft_strjoin(part_path, cmd);
-		free(part_path);
-		if (access(path, F_OK) == 0)
-			return (path);
-		free(path);
-		i++;
-	}
+	flag = 0;
 	i = -1;
-	while (paths[++i])
-		free(paths[i]);
-	free(paths);
+	while (pipex->paths[++i] != 0)
+	{
+		if (!access(pipex->paths[i], 0))
+		{
+			flag = 1;
+			break ;
+		}
+	}
+	if (flag)
+		return (pipex->paths[i]);
+	else
+		ft_printf("%s: comando non trovato\n",
+			ft_strrchr(pipex->paths[0], '/') + 1);
 	return (0);
 }
 
-void	execute(char *argv, char **envp)
+char	**path_n_command(t_pipex *pipex, char **argv, int el, char **envp)
 {
+	char	*temp;
 	char	**command;
-	char	*path;
-	int		i;
 
-	i = 0;
-	command = ft_split(argv, ' ');
-	path = find_path(command [0], envp);
-	if (!path)
+	pipex->paths = get_line(envp);
+	pipex->cmd_i = -1;
+	command = ft_split(argv[el], ' ');
+	while (pipex->paths[++pipex->cmd_i])
 	{
-		while (command[i++])
-			free(command[i]);
-		free (command);
-		error ();
+		temp = ft_strdup(pipex->paths[pipex->cmd_i]);
+		free(pipex->paths[pipex->cmd_i]);
+		pipex->paths[pipex->cmd_i] = ft_strjoin(temp, "/");
+		free(temp);
+		temp = ft_strdup(pipex->paths[pipex->cmd_i]);
+		free(pipex->paths[pipex->cmd_i]);
+		pipex->paths[pipex->cmd_i] = ft_strjoin(temp, command[0]);
+		free(temp);
 	}
-	if (execve(path, command, envp) == -1)
-		error();
+	free(command[0]);
+	temp = path_checker(pipex);
+	if (!temp)
+		command[0] = 0;
+	else
+		command[0] = ft_strdup(temp);
+	ft_free(pipex->paths);
+	return (command);
+}
+
+void	command_init(t_pipex *pipex, char **argv, char **envp)
+{
+	protect_space(argv[2]);
+	protect_space(argv[3]);
+	pipex->infile_fd = open(argv[1], O_RDONLY);
+	if (pipex->infile_fd <= 0)
+	{
+		ft_printf("%s: %s: file o directory inesistente\n", argv[1], argv[2]);
+		exit(1);
+	}
+	pipex->outfile_fd = open(argv[4], O_TRUNC | O_CREAT | O_RDWR);
+	pipex->cmd1 = path_n_command(pipex, argv, 2, envp);
+	pipex->cmd2 = path_n_command(pipex, argv, 3, envp);
+	convert(pipex->cmd1);
+	convert(pipex->cmd2);
+	r_trim(pipex);
 }

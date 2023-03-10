@@ -5,102 +5,123 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: enoviell <enoviell@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2023/03/07 11:36:26 by enoviell          #+#    #+#             */
-/*   Updated: 2023/03/09 15:10:07 by enoviell         ###   ########.fr       */
+/*   Created: 2023/03/10 15:37:46 by enoviell          #+#    #+#             */
+/*   Updated: 2023/03/10 15:38:54 by enoviell         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
+
 #include "pipex.h"
 
-// int child_process(int fd[2], char **argv, char **envp)
-// {
-// 	int		fd_in;
-// 	char	*path;
-
-// 	close(fd[0]);
-// 	dup2(fd[1], 1);
-// 	close(fd[1]);
-// 	path = get_path(argv[1], envp);
-// 	fd_in = open(argv[1], O_RDONLY);
-// 	if (fd_in == -1)
-// 		ft_error("Open error");
-// 	dup2(fd_in, 0);
-// 	close(fd_in);
-// 	execve(path, &argv[1], envp);
-// 	ft_error("Execve error");
-// 	return (0);
-// }
-
-void	child_process(char **argv, char **envp, int *fd)
+int	sub_proc(t_pipex *pipex)
 {
-	int	fd_in;
-
-	fd_in = open(argv[1], O_RDONLY, 0777);
-	if (fd_in == -1)
-		error();
-	dup2(fd[1], STDOUT_FILENO);
-	dup2(fd_in, STDIN_FILENO);
-	close(fd[0]);
-	execute(argv[2], envp);
+	pipex->pid1 = fork();
+	if (pipex->pid1 < 0)
+		return (-1);
+	if (pipex->pid1 == 0)
+	{
+		close(pipex->pipe_fd[0]);
+		dup2(pipex->pipe_fd[1], 1);
+		dup2(pipex->infile_fd, 0);
+		execve(pipex->cmd1[0], pipex->cmd1, NULL);
+	}
+	pipex->pid2 = fork();
+	if (pipex->pid2 < 0)
+		return (-1);
+	if (pipex->pid2 == 0)
+	{
+		dup2(pipex->pipe_fd[0], 0);
+		dup2(pipex->outfile_fd, 1);
+		close(pipex->pipe_fd[1]);
+		execve(pipex->cmd2[0], pipex->cmd2, NULL);
+	}
+	return (1);
 }
 
-void	father_process(char **argv, char **envp, int *fd)
+void	protect_space(char *strs)
 {
-	int	fd_out;
+	char	*str;
+	int		i;
 
-	fd_out = open(argv[4], O_WRONLY | O_CREAT | O_TRUNC, 0777);
-	if (fd_out == -1)
-		error();
-	dup2(fd[0], STDIN_FILENO);
-	dup2(fd_out, STDOUT_FILENO);
-	close(fd[1]);
-	execute(argv[3], envp);
+	str = ft_strchr(strs, '\'');
+	if (str)
+	{
+		i += 1;
+		while (str[++i] && str[i] != '\'')
+			if (str[i] == ' ')
+				str[i] = '#';
+	}
 }
 
-// int	main(int argc, char **argv, char **envp)
-// {
-// 	int		fd[2];
-// 	pid_t	pid;
-// 	int		status;
+void	convert(char **strs)
+{
+	char	*str;
+	int		i;
+	int		j;
 
-// 	if (argc != 5)
-// 		ft_error("Wrong number of arguments");
-// 	if (pipe(fd) == -1)
-// 		ft_error("Pipe error");
-// 	pid = fork();
-// 	if (pid == -1)
-// 		ft_error("Fork error");
-// 	if (pid == 0)
-// 		child_process(argv, envp, fd);
-// 	else
-// 	{
-// 		waitpid(pid, &status, 0);
-// 		father_process(argv, envp, fd);
-// 	}
-// 	return (0);
-// }
+	i = -1;
+	while (strs[++i])
+	{
+		if (ft_strchr(strs[i], '#'))
+		{
+			str = ft_strchr(strs[i], '#');
+			j = -1;
+			while (str[++j] && str[j] != '\'')
+			{
+				if (str[j] == '#')
+					str[j] = ' ';
+			}
+		}
+	}
+}
+
+void	r_trim(t_pipex *pipex)
+{
+	int		i;
+	char	*temp;
+
+	i = -1;
+	while (pipex->cmd1[++i])
+	{
+		if (ft_strchr(pipex->cmd1[i], '\''))
+		{
+			temp = ft_strtrim(pipex->cmd1[i], "\'");
+			free(pipex->cmd1[i]);
+			pipex->cmd1[i] = ft_strdup(temp);
+			free(temp);
+		}
+	}
+	i = -1;
+	while (pipex->cmd2[++i])
+	{
+		if (ft_strchr(pipex->cmd2[i], '\''))
+		{
+			temp = ft_strtrim(pipex->cmd2[i], "\'");
+			free(pipex->cmd2[i]);
+			pipex->cmd2[i] = ft_strdup(temp);
+			free(temp);
+		}
+	}
+}
 
 int	main(int argc, char **argv, char **envp)
 {
-	int		fd[2];
-	pid_t	pid1;
+	t_pipex	pipex;
+	char	*temp;
 
-	if (argc == 5)
+	if (argc < 5)
 	{
-		if (pipe(fd) == -1)
-			error();
-		pid1 = fork();
-		if (pid1 == -1)
-			error();
-		if (pid1 == 0)
-			child_process(argv, envp, fd);
-		waitpid(pid1, NULL, 0);
-		father_process(argv, envp, fd);
+		ft_printf("Usage: ./pipex infile cmd1 cmd2 outfile");
+		return (0);
 	}
-	else
-	{
-		ft_putstr_fd("\033[31mError: Bad arguments\n\e[0m", 2);
-		ft_putstr_fd("Ex: ./pipex <file1> <cmd1> <cmd2> <file2>\n", 1);
-	}
-	return (0);
+	if (pipe(pipex.pipe_fd) == -1)
+		return (1);
+	command_init(&pipex, argv, envp);
+	if (sub_proc(&pipex) < 0)
+		return (1);
+	close(pipex.pipe_fd[0]);
+	close(pipex.pipe_fd[1]);
+	waitpid(pipex.pid1, NULL, 0);
+	waitpid(pipex.pid2, NULL, 0);
+	free_cmd_n_file(&pipex);
 }
